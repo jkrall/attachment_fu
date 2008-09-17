@@ -2,8 +2,9 @@ module Technoweenie # :nodoc:
   module AttachmentFu # :nodoc:
     @@default_processors = %w(ImageScience Rmagick MiniMagick Gd2 CoreImage)
     @@tempfile_path      = File.join(RAILS_ROOT, 'tmp', 'attachment_fu')
-    @@content_types      = ['image/jpeg', 'image/pjpeg', 'image/gif', 'image/png', 'image/x-png', 'image/jpg', 'application/pdf']
-    mattr_reader :content_types, :tempfile_path, :default_processors
+    @@image_content_types      = ['image/jpeg', 'image/pjpeg', 'image/gif', 'image/png', 'image/x-png', 'image/jpg']
+    @@thumbnailable_content_types      = ['image/jpeg', 'image/pjpeg', 'image/gif', 'image/png', 'image/x-png', 'image/jpg', 'application/pdf']    
+    mattr_reader :image_content_types, :thumbnailable_content_types, :tempfile_path, :default_processors
     mattr_writer :tempfile_path
 
     class ThumbnailError < StandardError;  end
@@ -46,7 +47,7 @@ module Technoweenie # :nodoc:
         options[:thumbnails]       ||= {}
         options[:thumbnail_class]  ||= self
         options[:s3_access]        ||= :public_read
-        options[:content_type] = [options[:content_type]].flatten.collect! { |t| t == :image ? Technoweenie::AttachmentFu.content_types : t }.flatten unless options[:content_type].nil?
+        options[:content_type] = [options[:content_type]].flatten.collect! { |t| t == :image ? Technoweenie::AttachmentFu.image_content_types : t }.flatten unless options[:content_type].nil?
 
         unless options[:thumbnails].is_a?(Hash)
           raise ArgumentError, ":thumbnails option should be a hash: e.g. :thumbnails => { :foo => '50x50' }"
@@ -118,7 +119,8 @@ module Technoweenie # :nodoc:
     end
 
     module ClassMethods
-      delegate :content_types, :to => Technoweenie::AttachmentFu
+      delegate :image_content_types, :to => Technoweenie::AttachmentFu
+      delegate :thumbnailable_content_types, :to => Technoweenie::AttachmentFu
 
       # Performs common validations for attachment models.
       def validates_as_attachment
@@ -128,7 +130,12 @@ module Technoweenie # :nodoc:
 
       # Returns true or false if the given content type is recognized as an image.
       def image?(content_type)
-        content_types.include?(content_type)
+        image_content_types.include?(content_type)
+      end
+
+      # Returns true or false if the given content type is thumbnailable
+      def thumbnailable?(content_type)
+        thumbnailable_content_types.include?(content_type)
       end
 
       def self.extended(base)
@@ -220,7 +227,7 @@ module Technoweenie # :nodoc:
 
       # Returns true/false if an attachment is thumbnailable.  A thumbnailable attachment has an image content type and the parent_id attribute.
       def thumbnailable?
-        image? && respond_to?(:parent_id) && parent_id.nil?
+        self.class.thumbnailable?(content_type) && respond_to?(:parent_id) && parent_id.nil?
       end
 
       # Returns the class used to create new thumbnails for this attachment.
@@ -237,6 +244,7 @@ module Technoweenie # :nodoc:
         end
         # ImageScience doesn't create gif thumbnails, only pngs
         ext.sub!(/gif$/, 'png') if attachment_options[:processor] == "ImageScience"
+        ext = '.' + attachment_options[:thumbnail_extension] if attachment_options[:thumbnail_extension]
         "#{basename}_#{thumbnail}#{ext}"
       end
 

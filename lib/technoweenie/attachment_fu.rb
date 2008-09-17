@@ -258,6 +258,7 @@ module Technoweenie # :nodoc:
             :temp_path                => temp_file,
             :thumbnail_resize_options => size
           }
+          thumb.attributes[:content_type] = "image/#{attachment_options[:thumbnail_extension]}" if attachment_options[:thumbnail_extension]
           callback_with_args :before_thumbnail_saved, thumb
           thumb.save!
         end

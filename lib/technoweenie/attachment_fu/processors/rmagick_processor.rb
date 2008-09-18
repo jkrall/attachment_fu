@@ -47,7 +47,7 @@ module Technoweenie # :nodoc:
           end
           img.strip! unless attachment_options[:keep_profile]
           if attachment_options[:thumbnail_extension]
-            self.temp_path = write_to_temp_file( img.to_blob({:format=>attachment_options[:thumbnail_extension]}) )
+            self.temp_path = write_to_temp_file( img.to_blob {self.format=attachment_options[:thumbnail_extension]} )
           else
             self.temp_path = write_to_temp_file(img.to_blob)
           end

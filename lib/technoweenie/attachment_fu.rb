@@ -301,7 +301,8 @@ module Technoweenie # :nodoc:
       def uploaded_data=(file_data)
         if file_data.respond_to?(:content_type)
           return nil if file_data.size == 0
-          self.content_type = file_data.content_type
+          self.content_type = MIME::Types.type_for(file_data.original_filename).to_s
+          # self.content_type = file_data.content_type
           self.filename     = file_data.original_filename if respond_to?(:filename)
         else
           return nil if file_data.blank? || file_data['size'] == 0
@@ -373,6 +374,17 @@ module Technoweenie # :nodoc:
         self.class.with_image(temp_path, &block)
       end
 
+      # Force processing of attachment thumbnails
+      #   - useful for processing thumbnails as background tasks, rather than after save
+      def process_thumbnails!
+        if ( respond_to?(:process_attachment_with_processing) and thumbnailable? and
+          !attachment_options[:thumbnails].blank? and parent_id.nil? )
+          temp_file = temp_path || create_temp_file
+          attachment_options[:thumbnails].each { |suffix, size| create_or_update_thumbnail(temp_file, suffix, *size) }
+        end
+      end
+
+
       protected
         # Generates a unique filename for a Tempfile.
         def random_tempfile_filename
@@ -419,9 +431,14 @@ module Technoweenie # :nodoc:
         # Cleans up after processing.  Thumbnails are created, the attachment is stored to the backend, and the temp_paths are cleared.
         def after_process_attachment
           if @saved_attachment
-            if respond_to?(:process_attachment_with_processing) && thumbnailable? && !attachment_options[:thumbnails].blank? && parent_id.nil?
-              temp_file = temp_path || create_temp_file
-              attachment_options[:thumbnails].each { |suffix, size| create_or_update_thumbnail(temp_file, suffix, *size) }
+            if ( respond_to?(:process_attachment_with_processing) and thumbnailable? and
+              !attachment_options[:thumbnails].blank? and parent_id.nil? )
+              if (attachment_options[:background_thumbnails]==true and !attachment_options[:background_thumbnail_proc].nil?)
+                attachment_options[:background_thumbnail_proc].call(self)
+              else
+                temp_file = temp_path || create_temp_file
+                attachment_options[:thumbnails].each { |suffix, size| create_or_update_thumbnail(temp_file, suffix, *size) }
+              end
             end
             save_to_storage
             @temp_paths.clear
